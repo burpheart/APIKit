@@ -10,7 +10,7 @@ public class BurpExtender implements IBurpExtender {
     public static String NAME = "APIKit";
     public static String FULLNAME = NAME + " v" + VERSION;
 
-    private static PrintWriter stdout;
+    static  PrintWriter stdout;
     private static PrintWriter stderr;
     private static IBurpExtenderCallbacks callbacks;
     private static IExtensionHelpers helpers;

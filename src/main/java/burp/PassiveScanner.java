@@ -3,12 +3,14 @@ package burp;
 import burp.application.ApiScanner;
 import burp.application.apitypes.ApiEndpoint;
 import burp.application.apitypes.ApiType;
+import burp.exceptions.ApiKitRuntimeException;
 import burp.ui.ApiDocumentListTree;
 import burp.ui.ExtensionTab;
 import burp.utils.CommonUtils;
 import burp.utils.Constants;
 import burp.utils.UrlScanCount;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -32,18 +34,61 @@ public class PassiveScanner implements IScannerCheck {
     public List<IScanIssue> doPassiveScan(IHttpRequestResponse httpRequestResponse) {
         URL httpRequestURL = BurpExtender.getHelpers().analyzeRequest(httpRequestResponse).getUrl();
         String requestUrl = CommonUtils.getUrlWithoutFilename(httpRequestURL);
-
+        //CommonUtils.getUrlWithPath()
         // 目前检测的查重是将 http://user:pass@host:port/deep/path/filename?query#fragment
         // 归一化为 http://host:port/deep/path 后检测是否扫描过, 如果未来有对 query 有相关检测需求, 可以在修改 Common.getUrlWithoutFilename
-
+        scanSpringBoot(httpRequestResponse);
         if (this.scanedUrl.get(requestUrl) <= 0) {
             this.scanedUrl.add(requestUrl);
         } else {
             return null; // 检测到重复, 直接返回
         }
-
         ArrayList<ApiType> apiTypes = this.apiScanner.detect(httpRequestResponse, true);
         return this.parseApiDocument(apiTypes);
+    }
+
+    public boolean scanSpringBoot(IHttpRequestResponse httpRequestResponse) {
+        URL httpRequestURL = BurpExtender.getHelpers().analyzeRequest(httpRequestResponse).getUrl();
+        String Url;
+        String urlRootPath = CommonUtils.getUrlRootPath(httpRequestURL);
+        String path = httpRequestURL.getPath();
+        if (path.endsWith("/error")){
+            path = path.substring(0, path.lastIndexOf("/"));
+            if(path.length()<=1){
+                path="/";
+            }else{
+            path = path.substring(0, path.lastIndexOf("/")+1);
+            }
+        }else{
+        if (path.endsWith("/")) {
+            if(path.length()<=1){
+                path="/";
+            }else{
+            path = path.substring(0, path.length()-1);
+            }
+        }
+            path = path.substring(0, path.lastIndexOf("/")+1);
+        }
+        Url = urlRootPath + path;
+        IExtensionHelpers helpers = BurpExtender.getHelpers();
+        IHttpService httpService = httpRequestResponse.getHttpService();
+        byte[] newRequest = null;
+        if(this.scanedUrl.get(Url + "error") <= 0){
+        this.scanedUrl.add(Url + "error");
+        try {
+        newRequest = helpers.buildHttpRequest(new URL(Url + "error"));
+        } catch (MalformedURLException exception) {
+            throw new ApiKitRuntimeException(exception);
+        }
+        IHttpRequestResponse newHttpRequestResponse = CookieManager.makeHttpRequest(httpService, newRequest);
+        if(helpers.analyzeResponse(newHttpRequestResponse.getResponse()).getStatusCode() == 500){
+            BurpExtender.stdout.println("Find Springboot: " + Url + "/");
+            doPassiveScan(newHttpRequestResponse);
+            return true;
+        }
+            scanSpringBoot(newHttpRequestResponse);
+        }
+        return false;
     }
 
     public List<IScanIssue> parseApiDocument(ArrayList<ApiType> apiTypes) {
