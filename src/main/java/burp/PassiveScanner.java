@@ -82,7 +82,7 @@ public class PassiveScanner implements IScannerCheck {
         }
         IHttpRequestResponse newHttpRequestResponse = CookieManager.makeHttpRequest(httpService, newRequest);
         if(helpers.analyzeResponse(newHttpRequestResponse.getResponse()).getStatusCode() == 500){
-            BurpExtender.stdout.println("Find Springboot: " + Url + "/");
+            BurpExtender.stdout.println("Find Springboot: " + Url);
             doPassiveScan(newHttpRequestResponse);
             return true;
         }
